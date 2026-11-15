@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Sea View Resort",
+    "city": "Goa",
+    "price_per_night": 3200,
+    "rating": 4.0,
+    "area": "Candolim"
+  },
+  {
+    "name": "Palm Grove Hotel",
+    "city": "Goa",
+    "price_per_night": 4100,
+    "rating": 4.5,
+    "area": "Calangute"
+  },
+  {
+    "name": "Coastal Comfort Inn",
+    "city": "Goa",
+    "price_per_night": 2500,
+    "rating": 3.8,
+    "area": "Panaji"
+  }
+]
