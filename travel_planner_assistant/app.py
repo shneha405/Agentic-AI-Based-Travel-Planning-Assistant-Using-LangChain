@@ -76,30 +76,96 @@ def places_search(city, records, category, limit):
     return sorted(found, key=lambda x: -x["_rating"])[:limit]
 
 # Tool 4: Live weather via Open-Meteo (no API key)
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def weather_search(city, start, end):
-    geo = requests.get("https://geocoding-api.open-meteo.com/v1/search",
-                       params={"name": city, "count": 1, "language": "en", "format": "json"}, timeout=20)
-    geo.raise_for_status()
-    results = geo.json().get("results", [])
-    if not results:
-        return {"error": f"Could not find {city}."}
-    loc = results[0]
-    response = requests.get("https://api.open-meteo.com/v1/forecast", params={
-        "latitude": loc["latitude"], "longitude": loc["longitude"],
-        "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
-        "timezone": "auto", "start_date": start, "end_date": end
-    }, timeout=20)
-    response.raise_for_status()
-    return {"location": loc, "daily": response.json().get("daily", {})}
 
-def weather_name(code):
-    labels = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Fog",
-              51:"Light drizzle",53:"Drizzle",55:"Heavy drizzle",61:"Light rain",63:"Rain",
-              65:"Heavy rain",71:"Light snow",73:"Snow",75:"Heavy snow",80:"Rain showers",
-              81:"Rain showers",82:"Heavy showers",95:"Thunderstorm",96:"Thunderstorm with hail",
-              99:"Thunderstorm with hail"}
-    return labels.get(int(code), "Conditions unavailable")
+    try:
+        # Step 1: Find city coordinates
+        geo = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={
+                "name": city,
+                "count": 1,
+                "language": "en",
+                "format": "json"
+            },
+            timeout=20
+        )
+
+        geo.raise_for_status()
+
+        results = geo.json().get("results", [])
+
+        if not results:
+            return {"error": f"City not found: {city}"}
+
+        loc = results[0]
+
+        # Step 2: Check forecast availability
+        today = date.today()
+        max_date = today + timedelta(days=15)
+
+        start_date = date.fromisoformat(start)
+        end_date = date.fromisoformat(end)
+
+        if start_date > max_date:
+            return {
+                "error": "Weather forecast is not yet available "
+                         "for these travel dates. Forecasts are "
+                         "available up to 16 days ahead."
+            }
+
+        # Limit forecast to available dates
+        actual_end = min(end_date, max_date)
+
+        # Step 3: Fetch weather
+        response = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": loc["latitude"],
+                "longitude": loc["longitude"],
+                "daily": (
+                    "weather_code,"
+                    "temperature_2m_max,"
+                    "temperature_2m_min,"
+                    "precipitation_probability_max"
+                ),
+                "timezone": "auto",
+                "start_date": start_date.isoformat(),
+                "end_date": actual_end.isoformat()
+            },
+            timeout=20
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        return {
+            "location": loc,
+            "daily": data.get("daily", {}),
+            "forecast_note": (
+                "Weather forecast may cover only part "
+                "of your travel dates."
+                if actual_end < end_date else ""
+            )
+        }
+
+    except requests.exceptions.Timeout:
+        return {"error": "Weather API request timed out."}
+
+    except requests.exceptions.HTTPError as exc:
+        return {"error": f"Weather API HTTP error: {exc}"}
+
+    except requests.exceptions.RequestException as exc:
+        return {"error": f"Network connection error: {exc}"}
+
+    except (ValueError, KeyError) as exc:
+        return {"error": f"Invalid weather API response: {exc}"}
+
+    
 
 # Tool 5: Budget estimation
 def budget_estimate(flight, hotel_nightly, nights, daily_local, people):
